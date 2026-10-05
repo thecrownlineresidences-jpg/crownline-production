@@ -2454,6 +2454,16 @@ class Component extends DCLogic {
           {key:"prType",label:"All properties",col:"__type",options:["All properties","Owned by us","Owner-managed"]},
         ],
       };
+      // month filter (Bookings by check-in month, Expenses by date) — options come from the data itself
+      const monthNames=["January","February","March","April","May","June","July","August","September","October","November","December"];
+      const monthKeyOf=(ds)=>{ const m=/^(\d{4})-(\d{2})/.exec(String(ds||"")); return m?m[1]+"-"+m[2]:""; };
+      const monthLabelOf=(k)=>{ const p=k.split("-"); return monthNames[Number(p[1])-1]+" "+p[0]; };
+      const monthDateKey={Booking:"checkin",Expenses:"date"}[route];
+      if(monthDateKey&&filterDefs[route]){
+        const keys={}; rows.forEach(r=>{ const k=monthKeyOf(r[monthDateKey]); if(k) keys[k]=true; });
+        const opts=["All months"].concat(Object.keys(keys).sort().reverse().map(monthLabelOf));
+        filterDefs[route].unshift({key:route==="Booking"?"bkMonth":"expMonth",label:"All months",col:"__month",dateKey:monthDateKey,options:opts});
+      }
       const defs=filterDefs[route];
       if(defs){
         base.showFilters=true;
@@ -2463,10 +2473,14 @@ class Component extends DCLogic {
         base.filters=defs.map(d=>({value:cur[d.key],onChange:(e)=>this.setState({[d.key]:e.target.value}),options:d.options}));
         defs.forEach(d=>{ const v=cur[d.key]; if(v===d.label) return;
           if(d.col==="__type"){ rows=rows.filter(r=> v==="Owner-managed" ? r.owned : !r.owned); }
+          else if(d.col==="__month"){ rows=rows.filter(r=>{ const k=monthKeyOf(r[d.dateKey]); return k&&monthLabelOf(k)===v; }); }
           else if(d.col==="prop"){ rows=rows.filter(r=>r.prop===stripTag(v)||r.prop===v); }
           else { rows=rows.filter(r=>String(r[d.col])===v); }
         });
       }
+      // newest first, so each month reads top-down
+      if(route==="Booking"){ const idNum=(r)=>{ const m=/(\d+)/.exec(String(r.id||"")); return m?Number(m[1]):0; }; rows.sort((a,b)=>String(b.checkin||"").localeCompare(String(a.checkin||""))||idNum(b)-idNum(a)); }
+      else if(route==="Expenses") rows.sort((a,b)=>String(b.date||"").localeCompare(String(a.date||"")));
       // search
       const q=this.state.search.toLowerCase();
       if(q) rows=rows.filter(r=>Object.values(r).join(" ").toLowerCase().includes(q));
